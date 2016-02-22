@@ -85,7 +85,12 @@ function setDocument(xml) {
  */
 function loadDocument() {
 	xhr.open("GET", $('path').value, true);
-	xhr.send(null);
+	try {
+		xhr.send(null);
+	}
+	catch (e) {
+		fail(e.message);
+	}
 }
 
 /**
@@ -201,7 +206,11 @@ function exec() {
 		Filter whitespaces</abbr>?</label>
 	<input type="checkbox" id="ws" value="1" checked />
 </p>
-<!--<p><u>Note</u>: queries are case-sensitive!</p>-->
+<p><u>Notes</u>:</p>
+<ul>
+	<li>Queries are case-sensitive!</li>
+	<li>Only document-, element-, attribute- and text-nodes are shown.</li>
+</ul>
 <p><label>XPath Query:
 	<input id="query" value="/" size="40" /></label>
 	<button onclick="exec()" id="exec">Execute</button>
