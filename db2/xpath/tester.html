@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>XPath Execution Tool</title>
+<meta name="author" content="Guillaume HUYSMANS" />
+<!-- License: GNU GPL v2 -->
+<style>
+body {
+	font-family: Tahoma, Arial, Helvetica, sans-serif;
+	background-color: #EEEEEE
+}
+
+div#container {
+	width: 800px;
+	margin: auto;
+	padding: 10px;
+	background-color: white;
+	border-radius: 5px
+}
+
+h1 {margin-top: 5px; text-align: center}
+p {text-indent: 20px}
+p#err {color: red;}
+
+a, a:hover {
+	color: blue;
+	border-bottom: 1px dotted blue;
+	text-decoration: none
+}
+</style>
+
+
+<script>
+var doc = null;
+var xhr = new XMLHttpRequest();
+
+if (!xhr) {
+	alert("IE isn't supported yet");
+	$('load').disabled = true;
+}
+
+/**
+ * XHR event
+ */
+xhr.onreadystatechange = function () {
+	if (xhr.readyState != 4)
+		; //discard this event
+	else if (xhr.status==200 || !xhr.status) {
+		if (xhr.responseXML == null)
+			fail('Malformed XML');
+		else
+			setDocument(xhr.responseXML);
+	}
+	else
+		fail('HTTP error '+xhr.status);
+};
+
+/**
+ * Shorthand
+ */
+function $(id) {
+	return document.getElementById(id);
+}
+
+function fail(msg) {
+	$('res').style.display = 'none';
+	deleteChildren($('lst'));
+	$('err').style.display = 'block';
+	deleteChildren($('err'));
+	$('err').appendChild(document.createTextNode(msg));
+}
+
+/**
+ * Store a successfully loaded document and update UI
+ */
+function setDocument(xml) {
+	doc = xml;
+	//$('load').disabled = $('path').disabled = true;
+	$('exec').disabled = false;
+}
+
+/**
+ * Try to load the selected document.
+ */
+function loadDocument() {
+	xhr.open("GET", $('path').value, true);
+	xhr.send(null);
+}
+
+/**
+ * @url http://stackoverflow.com/a/3955238
+ */
+function deleteChildren(node) {
+	while (node.lastChild)
+		node.removeChild(node.lastChild);
+}
+
+/**
+ * Process text following the only user-defined option.
+ */
+function processText(s) {
+	if ($('ws').value)
+		//remove whitespaces from both ends
+		return s.replace(/^\s*/g, '').replace(/\s*$/g, '');
+	else
+		return s.replace('\n', '\\n').replace('\t', '\\t');
+}
+
+/**
+ * Add a tree to an output HTML element.
+ */
+function addTree(out, root) {
+	var node = document.createElement('li');
+	switch (root.nodeType) {
+	case Node.ELEMENT_NODE:
+	case Node.DOCUMENT_NODE:
+		var children = document.createElement('ul');
+		node.appendChild(document.createTextNode(root.nodeName));
+		if (root.nodeType == Node.ELEMENT_NODE) {
+			for (var i=0; i<root.attributes.length; i++) {
+				var a = root.attributes[i]; //shorthand
+				var t = document.createTextNode(a.name+": "+a.value);
+				var italic = document.createElement('i');
+				var item = document.createElement('li');
+				italic.appendChild(t);
+				item.appendChild(italic);
+				children.appendChild(item);
+			}
+		}
+		for (var i=0; i<root.childNodes.length; i++)
+			addTree(children, root.childNodes[i]);
+		node.appendChild(children);
+		break;
+	case Node.ATTRIBUTE_NODE:
+		var i = document.createElement('i');
+		var t = document.createTextNode(root.nodeName+": "+root.value);
+		i.appendChild(t);
+		node.appendChild(i);
+		break;
+	case Node.TEXT_NODE:
+		var s = processText(root.nodeValue);
+		if (s.length) {
+			var c = document.createElement('code');
+			c.appendChild(document.createTextNode(s));
+			node.appendChild(c);
+			break;
+		}
+		//fallthrough
+	default:
+		return; //discard other types
+	}
+	out.appendChild(node);
+}
+
+/**
+ * Execute the user's query.
+ */
+function exec() {
+	var q=$('query').value, r, d;
+	try {
+		r = doc.evaluate(q, doc, null, XPathResult.ANY_TYPE, null);
+	}
+	catch (e) {
+		fail(e.message);
+		return; //abort displaying
+	}
+	$('err').style.display = 'none';
+	deleteChildren($('lst'));
+	switch (r.resultType) {
+		case XPathResult.NUMBER_TYPE:
+			d = r.numberValue;
+			break;
+		case XPathResult.STRING_TYPE:
+			d = r.stringValue;
+			break;
+		case XPathResult.BOOLEAN_TYPE:
+			d = r.booleanValue;
+			break;
+		default:
+			var n;
+			$('res').style.display = 'none';
+			while (n = r.iterateNext())
+				addTree($('lst'), n);
+			return; //avoid using d below...
+	}
+	$('val').value = d;
+	$('res').style.display = 'block';
+}
+</script>
+</head>
+<body>
+<div id="container">
+<h1>XPath Execution Tool</h1>
+
+
+<p><label>XML Document: <input id="path" value="ex53_films.xml" /></label>
+	<button onclick="loadDocument()" id="load">Load</button></p>
+<p><label>
+	<abbr title="Remove whitespace-only text nodes">
+		Filter whitespaces</abbr>?</label>
+	<input type="checkbox" id="ws" value="1" checked />
+</p>
+<!--<p><u>Note</u>: queries are case-sensitive!</p>-->
+<p><label>XPath Query:
+	<input id="query" value="/" size="40" /></label>
+	<button onclick="exec()" id="exec">Execute</button>
+</p>
+<p id="res" style="display:none"><label>Result :
+	<input id="val" value="/" size="30"></label></p>
+<ul id="lst"></ul>
+<p id="err" style="display:none" />
+<script>
+//at least Firefox doesn't restore buttons' initial state.
+$('exec').disabled = true;
+</script>
+
+
+</div>
+</body>
+</html>
