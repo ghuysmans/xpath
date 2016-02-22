@@ -100,7 +100,7 @@ function deleteChildren(node) {
  * Process text following the only user-defined option.
  */
 function processText(s) {
-	if ($('ws').value)
+	if ($('ws').checked)
 		//remove whitespaces from both ends
 		return s.replace(/^\s*/g, '').replace(/\s*$/g, '');
 	else
