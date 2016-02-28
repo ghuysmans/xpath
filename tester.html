@@ -216,8 +216,8 @@ function exec() {
 <h1>XPath Execution Tool</h1>
 
 
-<p><label>XML Document: <input id="path" value="ex53_films.xml" /></label>
-	<button onclick="loadDocument()" id="load">Load</button></p>
+<p><label>XML Document: <input id="path" /></label>
+	<button onclick="loader.get($('path').value);" id="load">Load</button></p>
 <p><label>
 	<abbr title="Remove whitespace-only text nodes">
 		Filter whitespaces</abbr>?</label>
