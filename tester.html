@@ -49,66 +49,100 @@ a, a:hover {
 
 
 <script>
-var doc = null;
-var xhr = new XMLHttpRequest();
-
-if (!xhr) {
-	alert("IE isn't supported yet");
-	$('load').disabled = true;
-}
-
 /**
- * XHR event
- */
-xhr.onreadystatechange = function () {
-	if (xhr.readyState != 4)
-		; //discard this event
-	else if (xhr.status==200 || !xhr.status) {
-		if (xhr.responseXML == null)
-			fail('Malformed XML');
-		else
-			setDocument(xhr.responseXML);
-	}
-	else
-		fail('HTTP error '+xhr.status);
-};
-
-/**
- * Shorthand
+ * Shorthand à la jQuery
  */
 function $(id) {
 	return document.getElementById(id);
 }
 
+/**
+ * Single error reporting facility.
+ */
 function fail(msg) {
 	$('res').style.display = 'none';
 	deleteChildren($('lst'));
 	$('err').style.display = 'block';
 	deleteChildren($('err'));
+	//TODO use a more complex but nicer div
 	$('err').appendChild(document.createTextNode(msg));
 }
 
-/**
- * Store a successfully loaded document and update UI
- */
-function setDocument(xml) {
-	doc = xml;
-	//$('load').disabled = $('path').disabled = true;
-	$('exec').disabled = false;
+function hideError() {
+	$('err').style.display = 'none';
 }
 
-/**
- * Try to load the selected document.
- */
-function loadDocument() {
-	xhr.open("GET", $('path').value, true);
-	try {
-		xhr.send(null);
+function Loader() {
+	/*
+	 * Even though XMLHttpRequest is supported since IE7,
+	 * it can't access local files so we have to detect MS's property first.
+	 * But since IE11, the ActiveXObject property is hidden from the DOM
+	 * so here's this ugly comparison.
+	 */
+	var xhr, getXML, override;
+	if (window.ActiveXObject !== undefined) {
+		xhr = new ActiveXObject("Microsoft.XMLHTTP");
+		//this ActiveX doesn't return a responseXML object...
+		getXML = function () {
+			//IE's DOMParser doesn't support XPath
+			var xml = new ActiveXObject("Microsoft.XMLDOM");
+			xml.async = false;
+			xml.loadXML(xhr.responseText);
+			var e = xml.parseError; //shortcut
+			if (e != 0)
+				fail(e.reason+"At line "+e.line+", near "+e.srcText);
+			return xml;
+		};
+		override = function () {}; //nop
 	}
-	catch (e) {
-		fail(e.message);
+	else if (window.XMLHttpRequest) {
+		xhr = new XMLHttpRequest();
+		getXML = function () {
+			if (!xhr.responseXML)
+				fail("null responseXML");
+			else if (xhr.responseXML.documentElement.nodeName == "parsererror")
+				fail(xhr.responseXML.documentElement.textContent);
+			else
+				return xhr.responseXML;
+		};
+		override = function () {
+			xhr.overrideMimeType('text/xml');
+		};
+	}
+	else {
+		fail("Please get some modern browser...");
+		$('load').disabled = true;
+	}
+	this.get = function (url) {
+		override();
+		try {
+			xhr.open("GET", url, true);
+			//another IE hack
+			//http://keelypavan.blogspot.be/2006/03/reusing-xmlhttprequest-object-in-ie.html
+			xhr.onreadystatechange = function () {
+				if (xhr.readyState != 4)
+					; //discard this event
+				else if (xhr.status==200 || !xhr.status) {
+					var xml;
+					if (xml = getXML()) {
+						doc = xml;
+						$('exec').disabled = false;
+						hideError();
+					}
+				}
+				else
+					fail('HTTP error '+xhr.status);
+			}
+			xhr.send(null);
+		}
+		catch (e) {
+			fail(e.message);
+		}
 	}
 }
+
+var doc = null;
+var loader = new Loader();
 
 /**
  * @url http://stackoverflow.com/a/3955238
@@ -181,22 +215,38 @@ function addTree(out, root) {
 function exec() {
 	var q=$('query').value, r, d;
 	try {
-		r = doc.evaluate(q, doc, null, XPathResult.ANY_TYPE, null);
+		if (doc.evaluate)
+			r = doc.evaluate(q, doc, null, XPathResult.ANY_TYPE, null);
+		else {
+			//iterator mocking doc.evaluate's behavior
+			//this avoids code duplication
+			r = {
+				resultType: null, //triggers the default case
+				nodes: doc.selectNodes(q),
+				i: 0,
+				iterateNext: function() {
+					if (this.i < this.nodes.length)
+						return this.nodes[this.i++];
+					else
+						return null;
+				}
+			};
+		}
 	}
 	catch (e) {
 		fail(e.message);
 		return; //abort displaying
 	}
-	$('err').style.display = 'none';
+	hideError();
 	deleteChildren($('lst'));
 	switch (r.resultType) {
-		case XPathResult.NUMBER_TYPE:
+		case 1: //XPathResult.NUMBER_TYPE:
 			d = r.numberValue;
 			break;
-		case XPathResult.STRING_TYPE:
+		case 2: //XPathResult.STRING_TYPE:
 			d = r.stringValue;
 			break;
-		case XPathResult.BOOLEAN_TYPE:
+		case 3: //XPathResult.BOOLEAN_TYPE:
 			d = r.booleanValue;
 			break;
 		default:
