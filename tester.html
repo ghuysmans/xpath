@@ -38,7 +38,11 @@ div#container {
 
 h1 {margin-top: 5px; text-align: center}
 p {text-indent: 20px}
-p#err {color: red;}
+
+pre#err {
+	margin-left: 20px;
+	color: red;
+}
 
 a, a:hover {
 	color: blue;
@@ -72,77 +76,56 @@ function hideError() {
 	$('err').style.display = 'none';
 }
 
-function Loader() {
-	/*
-	 * Even though XMLHttpRequest is supported since IE7,
-	 * it can't access local files so we have to detect MS's property first.
-	 * But since IE11, the ActiveXObject property is hidden from the DOM
-	 * so here's this ugly comparison.
-	 */
-	var xhr, getXML, override;
+function bigFail() {
+	fail("Please get some modern browser...");
+	$('load').disabled = true;
+}
+
+function validateXML(xml) {
+	if (xml.documentElement.nodeName == "parsererror")
+		fail(xml.documentElement.textContent);
+	else
+		return xml;
+}
+
+function parseXML(s) {
 	if (window.ActiveXObject !== undefined) {
-		xhr = new ActiveXObject("Microsoft.XMLHTTP");
-		//this ActiveX doesn't return a responseXML object...
-		getXML = function () {
-			//IE's DOMParser doesn't support XPath
-			var xml = new ActiveXObject("Microsoft.XMLDOM");
-			xml.async = false;
-			xml.loadXML(xhr.responseText);
-			var e = xml.parseError; //shortcut
-			if (e != 0)
-				fail(e.reason+"At line "+e.line+", near "+e.srcText);
+		//IE's DOMParser doesn't support XPath
+		var xml = new ActiveXObject("Microsoft.XMLDOM");
+		xml.async = false;
+		xml.loadXML(s);
+		var e = xml.parseError; //shortcut
+		if (e != 0)
+			fail(e.reason+"At line "+e.line+", near "+e.srcText);
+		else
 			return xml;
-		};
-		override = function () {}; //nop
 	}
-	else if (window.XMLHttpRequest) {
-		xhr = new XMLHttpRequest();
-		getXML = function () {
-			if (!xhr.responseXML)
-				fail("null responseXML");
-			else if (xhr.responseXML.documentElement.nodeName == "parsererror")
-				fail(xhr.responseXML.documentElement.textContent);
-			else
-				return xhr.responseXML;
-		};
-		override = function () {
-			xhr.overrideMimeType('text/xml');
-		};
+	else if (DOMParser) {
+		var parser = new DOMParser();
+		var xml = parser.parseFromString(s, "application/xml");
+		return validateXML(xml);
 	}
-	else {
-		fail("Please get some modern browser...");
-		$('load').disabled = true;
-	}
-	this.get = function (url) {
-		override();
-		try {
-			xhr.open("GET", url, true);
-			//another IE hack
-			//http://keelypavan.blogspot.be/2006/03/reusing-xmlhttprequest-object-in-ie.html
-			xhr.onreadystatechange = function () {
-				if (xhr.readyState != 4)
-					; //discard this event
-				else if (xhr.status==200 || !xhr.status) {
-					var xml;
-					if (xml = getXML()) {
-						doc = xml;
-						$('exec').disabled = false;
-						hideError();
-					}
-				}
-				else
-					fail('HTTP error '+xhr.status);
-			}
-			xhr.send(null);
-		}
-		catch (e) {
-			fail(e.message);
-		}
-	}
+	else
+		bigFail();
 }
 
 var doc = null;
-var loader = new Loader();
+
+/**
+ * Load the selected file.
+ */
+function load() {
+	if ($('file').files.length) {
+		var fr = new FileReader();
+		fr.onload = function (_) {
+			if (doc = parseXML(fr.result)) {
+				$('exec').disabled = false;
+				hideError();
+			}
+		};
+		fr.readAsText($('file').files[0]);
+	}
+}
 
 /**
  * @url http://stackoverflow.com/a/3955238
@@ -266,8 +249,8 @@ function exec() {
 <h1>XPath Execution Tool</h1>
 
 
-<p><label>XML Document: <input id="path" /></label>
-	<button onclick="loader.get($('path').value);" id="load">Load</button></p>
+<p><label>XML Document:
+	<input type="file" id="file" onchange="load();" /></label></p>
 <p><label>
 	<abbr title="Remove whitespace-only text nodes">
 		Filter whitespaces</abbr>?</label>
@@ -285,8 +268,9 @@ function exec() {
 <p id="res" style="display:none"><label>Result :
 	<input id="val" size="30"></label></p>
 <ul id="lst"></ul>
-<p id="err" style="display:none"></p>
+<pre id="err" style="display:none"></pre>
 <script>
+load();
 //at least Firefox doesn't restore buttons' initial state.
 $('exec').disabled = true;
 </script>
