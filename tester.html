@@ -155,7 +155,15 @@ function addTree(out, root) {
 	case Node.ELEMENT_NODE:
 	case Node.DOCUMENT_NODE:
 		var children = document.createElement('ul');
-		node.appendChild(document.createTextNode(root.nodeName));
+		if (root.childNodes.length ||
+				root.nodeType==Node.ELEMENT_NODE && root.attributes.length){
+			var link = document.createElement('a');
+			link.setAttribute('onclick', 'toggle(this);');
+			link.appendChild(document.createTextNode(root.nodeName));
+			node.appendChild(link);
+		}
+		else
+			node.appendChild(document.createTextNode(root.nodeName));
 		if (root.nodeType == Node.ELEMENT_NODE) {
 			for (var i=0; i<root.attributes.length; i++) {
 				var a = root.attributes[i]; //shorthand
@@ -190,6 +198,14 @@ function addTree(out, root) {
 		return; //discard other types
 	}
 	out.appendChild(node);
+}
+
+/**
+ * Toggle a node's expanded state.
+ */
+function toggle(a) {
+	var sub = a.parentNode.getElementsByTagName('ul')[0];
+	sub.style.display = sub.style.display=='none' ? 'block' : 'none';
 }
 
 /**
